@@ -31,27 +31,6 @@ void    init_structs(t_plane **plane, t_shape **shape)
     (*shape)->data = *plane;
 }
 
-int record_infos(t_shape **shape, FILE *file)
-{
-    int ret;
-
-    ret = fscanf(file, "%d %d %c\n", &((*shape)->data->width), \
-    &((*shape)->data->height), &((*shape)->data->background));
-    if (ret != 3)
-        return (1);
-    ret = fscanf(file, "%c %f %f %f %c\n", &((*shape)->t), \
-    &((*shape)->x), &((*shape)->y), &((*shape)->r), &((*shape)->c));
-    if (ret != 6)
-        return (1);
-    if ((*shape)->data->width <= 0 || (*shape)->data->width > 300 || \
-    (*shape)->data->height <= 0 || (*shape)->data->height > 300 || \
-    ((*shape)->t != 'r' && (*shape)->t != 'R'))
-        return (1);
-    if ((*shape)->r <= 0)
-        return (1);
-    return (0);
-}
-
 char    *fill_plane(t_shape *shape)
 {
     float   i;
@@ -86,10 +65,14 @@ int is_in_circle(t_shape *shape, float x, float y)
 {
     float distance;
 
-    distance = sqrtf(powf(x - shape->x, 2.0) + powf(y - shape->y, 2.0));
+    distance = sqrtf(powf(x - shape->y, 2.0) + powf(y - shape->x, 2.0));
     if (distance <= shape->r)
+    {
+        if (distance - shape->r <= 1.00000000 && distance - shape->r >= -1.00000000)
+            return (1);
         return (0);
-    return (1);
+    }
+    return (-1);
 }
 
 void    fill_shape(char **drawing, t_shape *shape)
@@ -103,7 +86,8 @@ void    fill_shape(char **drawing, t_shape *shape)
     {
         while (j < shape->data->height)
         {
-            if (is_in_circle(shape, i, j) == 0)
+            if ((is_in_circle(shape, i, j) >= 0 && shape->t == 'C') || \
+            (is_in_circle(shape, i, j) == 1 && shape->t == 'c'))
                 (*drawing)[(int)(i + j * shape->data->width)] = shape->c;
             j++;
         }
@@ -132,6 +116,41 @@ void    draw_drawing(char *drawing, t_shape *shape)
     }
 }
 
+int record_infos(t_shape **shape, FILE *file, char *drawing)
+{
+    int ret;
+
+    ret = fscanf(file, "%d %d %c\n", &((*shape)->data->height), \
+    &((*shape)->data->width), &((*shape)->data->background));
+    if (ret != 3)
+        return (1);
+    ret = fscanf(file, "%c %f %f %f %c\n", &((*shape)->t), \
+    &((*shape)->x), &((*shape)->y), &((*shape)->r), &((*shape)->c));
+    if (ret != 5)
+        return (1);
+    if ((*shape)->data->width <= 0 || (*shape)->data->width > 300 || \
+    (*shape)->data->height <= 0 || (*shape)->data->height > 300 || \
+    ((*shape)->t != 'c' && (*shape)->t != 'C'))
+        return (1);
+    if ((*shape)->r <= 0)
+        return (1);
+    drawing = fill_plane(*shape);
+    fill_shape(&drawing, *shape);
+    while ((ret = fscanf(file, "%c %f %f %f %c\n", &((*shape)->t), \
+    &((*shape)->x), &((*shape)->y), &((*shape)->r), &((*shape)->c))) == 5)
+    {
+        if ((*shape)->data->width <= 0 || (*shape)->data->width > 300 || \
+        (*shape)->data->height <= 0 || (*shape)->data->height > 300 || \
+        ((*shape)->t != 'c' && (*shape)->t != 'C'))
+            return (1);
+        if ((*shape)->r <= 0)
+            return (1);
+        fill_shape(&drawing, *shape);
+    }
+    draw_drawing(drawing, *shape);
+    return (0);
+}
+
 int main(int argc, char **argv)
 {
     FILE     *ret;
@@ -151,11 +170,8 @@ int main(int argc, char **argv)
     if (argc != 2 || !ret)
         return (1);
     init_structs(&plane, &shape);
-    if (record_infos(&shape, ret))
+    if (record_infos(&shape, ret, drawing))
         write(1, "Error: Operation file corrupted\n", 32);
-    drawing = fill_plane(shape);
-    fill_shape(&drawing, shape);
-    draw_drawing(drawing, shape);
     fclose(ret);
     free(drawing);
     free(shape->data);
